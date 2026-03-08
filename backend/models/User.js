@@ -33,10 +33,10 @@ const userSchema = new mongoose.Schema({
     default: ''
   },
   
-  // 每日免费额度
+  // 每日免费额度（MVP期间设置为999，实际无限制）
   dailyFreeCount: {
     type: Number,
-    default: 3 // 每天3个免费额度
+    default: 999 // MVP期间：无限制
   },
   lastFreeResetDate: {
     type: Date,
@@ -91,10 +91,9 @@ userSchema.methods.resetDailyFreeCount = function() {
   return false
 }
 
-// 检查是否有免费额度
+// 检查是否有免费额度（MVP期间：始终返回true）
 userSchema.methods.hasFreeQuota = function() {
-  this.resetDailyFreeCount()
-  return this.dailyFreeCount > 0
+  return true // MVP期间：无限制
 }
 
 // 消耗免费额度

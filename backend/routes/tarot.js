@@ -31,52 +31,32 @@ router.post('/draw', authMiddleware, async (req, res) => {
       return res.status(404).json({ code: 1002, message: '用户不存在' })
     }
     
-    // 检查是否有免费额度
-    if (!user.hasFreeQuota()) {
-      return res.status(403).json({ 
-        code: 2001, 
-        message: '今日免费额度已用完，明天再来或分享获取更多机会',
-        data: {
-          needPay: true,
-          dailyFreeCount: user.dailyFreeCount
-        }
-      })
-    }
-    
-    // 消耗额度
-    const quotaResult = user.useQuota()
-    await user.save()
+    // MVP期间：无需检查额度，直接使用
+    // const quotaResult = user.useQuota()
+    // await user.save()
     
     // 抽牌
     const cards = tarotService.drawCards(spreadType)
     
-    // AI解读
-    let interpretation = ''
-    let freeInterpretation = ''
-    
-    if (spreadType === 'single') {
-      // 单张牌免费完整解读
-      const aiResult = await aiService.interpretTarot(cards, question)
-      interpretation = aiResult.interpretation
-      freeInterpretation = aiResult.summary
-    } else {
-      // 多张牌需要付费解锁详细解读
-      freeInterpretation = '牌面显示，你正处在一个重要的转折点。详细解读将为你分析每张牌的具体含义...'
-    }
+    // AI解读（MVP期间：所有解读免费）
+    const aiResult = await aiService.interpretTarot(cards, question)
+    const interpretation = aiResult.interpretation
+    const freeInterpretation = aiResult.summary
     
     // 更新统计
     user.stats.tarotCount += 1
     await user.save()
     
-    // 保存记录
+    // 保存记录（MVP期间：默认已付费）
     const reading = await TarotReading.create({
       userId,
       spreadType,
       question,
       cards,
-      interpretation: interpretation || '付费后可见',
+      interpretation,
       freeInterpretation,
-      isPaid: spreadType === 'single' // 单张牌默认已付费
+      isPaid: true, // MVP期间：默认已付费
+      detailInterpretation: interpretation
     })
     
     res.json({
@@ -88,12 +68,10 @@ router.post('/draw', authMiddleware, async (req, res) => {
         question,
         cards,
         freeInterpretation,
-        dailyFreeCount: quotaResult.remaining,
-        paid: {
-          isUnlocked: spreadType === 'single',
-          preview: '详细解读包含每张牌的深度分析...',
-          price: 9.9
-        }
+        interpretation, // MVP期间：直接返回完整解读
+        dailyFreeCount: 999, // MVP期间：显示无限制
+        isPaid: true, // MVP期间：默认已付费
+        detailInterpretation: interpretation
       }
     })
   } catch (err) {
