@@ -110,7 +110,15 @@ const Order = {
   
   async findById(id) {
     const order = memoryDB.orders.get(id)
-    return order ? { ...order, _id: id } : null
+    if (!order) return null
+    
+    const result = { ...order, _id: id }
+    result.save = async () => {
+      // 更新内存数据库
+      memoryDB.orders.set(id, result)
+      return result
+    }
+    return result
   },
   
   async findByIdAndUpdate(id, update, options = {}) {

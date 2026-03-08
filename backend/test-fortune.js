@@ -37,13 +37,19 @@ function drawTarot(count = 3) {
   }))
 }
 
-// 调用智谱AI
+// 调用智谱AI（v4 API）
 async function callZhipuAI(prompt) {
   try {
     const response = await axios.post(
-      `${ZHIPU_BASE_URL}/glm-4/invoke`,
+      'https://open.bigmodel.cn/api/paas/v4/chat/completions',
       {
-        prompt,
+        model: 'glm-4',
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
         temperature: 0.85,
         max_tokens: 800
       },
@@ -56,8 +62,8 @@ async function callZhipuAI(prompt) {
       }
     )
     
-    if (response.data && response.data.data && response.data.data.choices) {
-      return response.data.data.choices[0].content
+    if (response.data && response.data.choices && response.data.choices.length > 0) {
+      return response.data.choices[0].message.content
     }
     
     throw new Error('AI响应格式错误')
@@ -234,8 +240,9 @@ async function testAIChat() {
   
   try {
     const response = await axios.post(
-      `${ZHIPU_BASE_URL}/glm-4/invoke`,
+      'https://open.bigmodel.cn/api/paas/v4/chat/completions',
       {
+        model: 'glm-4',
         messages,
         temperature: 0.9,
         max_tokens: 500
@@ -249,7 +256,7 @@ async function testAIChat() {
       }
     )
     
-    const reply = response.data.data.choices[0].content
+    const reply = response.data.choices[0].message.content
     
     console.log('\n🤖 AI回复：')
     console.log(reply)
@@ -265,8 +272,9 @@ async function testAIChat() {
     )
     
     const response2 = await axios.post(
-      `${ZHIPU_BASE_URL}/glm-4/invoke`,
+      'https://open.bigmodel.cn/api/paas/v4/chat/completions',
       {
+        model: 'glm-4',
         messages,
         temperature: 0.9,
         max_tokens: 500
@@ -280,7 +288,7 @@ async function testAIChat() {
       }
     )
     
-    const reply2 = response2.data.choices[0].content
+    const reply2 = response2.data.choices[0].message.content
     console.log('\n🤖 AI回复：')
     console.log(reply2)
     

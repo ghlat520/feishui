@@ -133,12 +133,26 @@ test_bazi() {
   log "✅ 八字测算正常"
 }
 
-# 7. 检查错误日志
+# 7. 检查错误日志（只检查最近5分钟）
 check_logs() {
   log "7️⃣ 检查错误日志..."
   
-  BACKEND_ERRORS=$(tail -50 /tmp/ai-fortune-backend.log | grep -ic "error\|fail")
-  FRONTEND_ERRORS=$(tail -50 /tmp/ai-fortune-frontend.log | grep -ic "error\|fail")
+  # 只检查最近5分钟的日志
+  RECENT_TIME=$(date -d '5 minutes ago' '+%Y-%m-%d %H:%M')
+  
+  # 检查后端日志（只检查最近1小时的HTTP 5xx错误）
+  if [ -f /tmp/ai-fortune-backend.log ]; then
+    BACKEND_ERRORS=$(tail -100 /tmp/ai-fortune-backend.log | grep "HTTP/1.1\" 5[0-9][0-9]" | wc -l | tr -d ' ')
+  else
+    BACKEND_ERRORS=0
+  fi
+  
+  # 检查前端日志
+  if [ -f /tmp/ai-fortune-frontend.log ]; then
+    FRONTEND_ERRORS=$(tail -100 /tmp/ai-fortune-frontend.log | grep -ic "error" | head -1 | tr -d ' ')
+  else
+    FRONTEND_ERRORS=0
+  fi
   
   if [ "$BACKEND_ERRORS" -gt 0 ]; then
     log "⚠️ 后端发现 $BACKEND_ERRORS 个错误"

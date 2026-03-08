@@ -7,14 +7,23 @@ class AIService {
   }
   
   /**
-   * 调用智谱AI（简化版）
+   * 调用智谱AI（使用Chat Completions API）
    */
   async call(prompt, temperature = 0.85, maxTokens = 800) {
     try {
+      // 使用v4 Chat Completions API
+      const v4BaseURL = process.env.ZHIPU_BASE_URL?.replace('/v3/model-api', '/v4') || 'https://open.bigmodel.cn/api/paas/v4'
+      
       const response = await axios.post(
-        `${this.baseURL}/glm-4/invoke`,
+        `${v4BaseURL}/chat/completions`,
         {
-          prompt,
+          model: 'glm-4',
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
           temperature,
           max_tokens: maxTokens
         },
@@ -27,8 +36,8 @@ class AIService {
         }
       )
       
-      if (response.data?.data?.choices) {
-        return response.data.data.choices[0].content
+      if (response.data?.choices) {
+        return response.data.choices[0].message.content
       }
       
       throw new Error('AI响应格式错误')
