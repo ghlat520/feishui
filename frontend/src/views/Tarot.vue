@@ -260,10 +260,15 @@ const revealCard = async (index) => {
         cards.value = res.data.cards
         readingId.value = res.data.readingId
         interpretation.value = res.data.interpretation || res.data.freeInterpretation
+      } else {
+        // 显示错误信息
+        showToast(res.message || '抽取塔罗牌失败')
+        return
       }
     } catch (err) {
       closeToast()
-      showToast('抽取塔罗牌失败')
+      console.error('抽取塔罗牌失败:', err)
+      showToast('抽取塔罗牌失败，请稍后再试')
       return
     }
   }
@@ -281,9 +286,12 @@ const getReading = async () => {
     if (res.code === 200) {
       interpretation.value = res.data.interpretation || interpretation.value
       step.value = 2
+    } else {
+      showToast(res.message || '获取解读失败')
     }
   } catch (err) {
-    showToast('获取解读失败')
+    console.error('获取解读失败:', err)
+    showToast('获取解读失败，请稍后再试')
   } finally {
     loading.value = false
   }
