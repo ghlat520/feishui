@@ -183,6 +183,19 @@
               </div>
             </div>
           </div>
+          
+          <div class="chat-entry">
+            <van-button 
+              type="primary" 
+              plain
+              block 
+              round
+              icon="chat-o"
+              @click="startChat"
+            >
+              与塔罗师深入对话
+            </van-button>
+          </div>
         </div>
 
         <div class="action-buttons">
@@ -370,6 +383,14 @@ const reset = () => {
 // 分享
 const share = () => {
   showToast('分享功能开发中')
+}
+
+// 开始对话
+const startChat = () => {
+  router.push({
+    path: '/chat',
+    query: { readingId: readingId.value }
+  })
 }
 
 // 获取位置名称
@@ -648,6 +669,10 @@ const getCardEmoji = (card) => {
   background: #f0f5ff;
   border-radius: 8px;
   color: #666;
+}
+
+.chat-entry {
+  margin-top: 20px;
 }
 
 .action-buttons {
