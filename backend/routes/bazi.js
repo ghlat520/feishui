@@ -51,11 +51,11 @@ router.post('/calculate', authMiddleware, async (req, res) => {
       birthTime,
       birthPlace,
       gender,
-      bazi: bazi.bazi,
-      wuxing: bazi.wuxing,
-      shengxiao: bazi.shengxiao,
-      nayin: bazi.nayin,
-      xingzuo: bazi.xingzuo,
+      bazi: baziResult.bazi,
+      wuxing: baziResult.wuxing,
+      shengxiao: baziResult.shengxiao,
+      nayin: baziResult.nayin,
+      xingzuo: baziResult.xingzuo,
       character: character.character,
       career: character.career,
       wealth: character.wealth,
@@ -75,13 +75,13 @@ router.post('/calculate', authMiddleware, async (req, res) => {
           solarTerm: '立春后'
         },
         
-        bazi: bazi.bazi,
-        wuxing: bazi.wuxing,
-        wuxingLack: getWuxingLack(bazi.wuxing),
+        bazi: baziResult.bazi,
+        wuxing: baziResult.wuxing,
+        wuxingLack: getWuxingLack(baziResult.wuxing),
         
-        shengxiao: bazi.shengxiao,
-        nayin: bazi.nayin,
-        xingzuo: bazi.xingzuo,
+        shengxiao: baziResult.shengxiao,
+        nayin: baziResult.nayin,
+        xingzuo: baziResult.xingzuo,
         
         free: {
           character: character.character
