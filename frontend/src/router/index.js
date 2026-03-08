@@ -29,12 +29,6 @@ const routes = [
     path: '/bazi',
     name: 'Bazi',
     component: () => import('@/views/Bazi.vue'),
-    meta: { title: '八字测算' }
-  },
-  {
-    path: '/bazi',
-    name: 'Bazi',
-    component: () => import('@/views/Bazi.vue'),
     meta: { title: '八字测算', requiresAuth: true }
   },
   {
