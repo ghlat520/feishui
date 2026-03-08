@@ -45,6 +45,7 @@ try {
   app.use('/api/bazi', require('./routes/bazi'))
   app.use('/api/pay', require('./routes/pay'))
   app.use('/api/user', require('./routes/user'))
+  app.use('/api/points', require('./routes/points'))
   console.log('✅ 路由注册成功')
 } catch (err) {
   console.error('❌ 路由注册失败:', err)

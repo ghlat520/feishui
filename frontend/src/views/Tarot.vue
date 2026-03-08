@@ -1,11 +1,26 @@
 <template>
   <div class="tarot">
-    <!-- 顶部导航 -->
     <van-nav-bar
       title="塔罗占卜"
       left-arrow
       @click-left="router.back()"
-    />
+    >
+      <template #right>
+        <div class="points-info">
+          <van-icon name="gem-o" /> {{ userPoints }}
+        </div>
+      </template>
+    </van-nav-bar>
+
+    <!-- 积分不足提示 -->
+    <van-notice-bar
+      v-if="showQuotaWarning"
+      color="#ff6b6b"
+      background="#fff5f5"
+      left-icon="info-o"
+    >
+      免费额度已用完，需要10积分或充值
+    </van-notice-bar>
 
     <!-- 步骤条 -->
     <div class="steps-container">
@@ -18,6 +33,13 @@
 
     <!-- 步骤1：输入问题 -->
     <div v-if="step === 0" class="step-content">
+      <div class="quota-info">
+        <van-cell-group inset>
+          <van-cell title="今日免费额度" :value="`${dailyFreeCount}/3`" icon="gift-o" />
+          <van-cell title="我的积分" :value="userPoints" icon="gem-o" />
+        </van-cell-group>
+      </div>
+
       <div class="section">
         <div class="title">🔮 你想探索什么？</div>
         <van-field
@@ -37,7 +59,7 @@
           <van-cell-group inset>
             <van-cell 
               title="单张牌" 
-              label="快速指引，适合简单问题"
+              label="快速指引，适合简单问题（免费）"
               clickable 
               @click="spreadType = 'one'"
             >
@@ -47,7 +69,7 @@
             </van-cell>
             <van-cell 
               title="三张牌" 
-              label="过去/现在/未来，深度分析"
+              label="过去/现在/未来，深度分析（消耗额度）"
               clickable 
               @click="spreadType = 'three'"
             >
@@ -57,10 +79,6 @@
             </van-cell>
           </van-cell-group>
         </van-radio-group>
-      </div>
-
-      <div class="tips">
-        <van-icon name="info-o" /> AI将根据你的问题进行专业解读
       </div>
 
       <div class="submit-btn">
@@ -127,6 +145,12 @@
     <!-- 步骤3：AI解读 -->
     <div v-if="step === 2" class="step-content">
       <div class="reading-result">
+        <div class="quota-used">
+          <van-tag :type="quotaUsed === 'free' ? 'success' : 'primary'">
+            {{ quotaUsed === 'free' ? '已使用免费额度' : '已消耗10积分' }}
+          </van-tag>
+        </div>
+
         <div class="section">
           <div class="title">🎯 你的问题</div>
           <div class="question-text">{{ question }}</div>
@@ -175,15 +199,6 @@
           <div class="title">📖 详细解读</div>
           <div class="detail-content">{{ detailInterpretation }}</div>
           
-          <div class="advice-section">
-            <div class="title">💡 AI建议</div>
-            <div class="advice-list">
-              <div v-for="(item, index) in advice" :key="index" class="advice-item">
-                <van-icon name="success" /> {{ item }}
-              </div>
-            </div>
-          </div>
-          
           <div class="chat-entry">
             <van-button 
               type="primary" 
@@ -209,17 +224,43 @@
             重新占卜
           </van-button>
           <van-button 
+            v-if="userPoints < 10"
             plain 
-            type="default" 
+            type="warning" 
             block 
             round 
-            @click="share"
+            @click="showPointsPurchase"
           >
-            分享给朋友
+            充值积分
           </van-button>
         </div>
       </div>
     </div>
+
+    <!-- 积分不足弹窗 -->
+    <van-dialog
+      v-model:show="showQuotaDialog"
+      title="额度不足"
+      show-cancel-button
+      @confirm="goToPoints"
+    >
+      <div class="quota-dialog-content">
+        <p>您的免费额度和积分已用完</p>
+        <p>充值积分可继续占卜</p>
+        <div class="points-packages">
+          <div 
+            v-for="pkg in pointsPackages" 
+            :key="pkg.id"
+            class="package-item"
+            :class="{ recommend: pkg.recommend }"
+            @click="selectPackage(pkg)"
+          >
+            <div class="points">{{ pkg.points }}积分</div>
+            <div class="price">¥{{ pkg.price }}</div>
+          </div>
+        </div>
+      </div>
+    </van-dialog>
 
     <van-tabbar v-model="active">
       <van-tabbar-item icon="home-o" to="/">首页</van-tabbar-item>
@@ -230,13 +271,16 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast, showLoadingToast, closeToast } from 'vant'
+import { showToast, showLoadingToast, closeToast, showConfirmDialog } from 'vant'
 import { tarotApi } from '@/api/tarot'
 import { payApi } from '@/api/pay'
+import { pointsApi } from '@/api/points'
+import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
+const userStore = useUserStore()
 const active = ref(1)
 
 const step = ref(0)
@@ -250,7 +294,13 @@ const readingId = ref('')
 const isPaid = ref(false)
 const unlockLoading = ref(false)
 const detailInterpretation = ref('')
-const advice = ref([])
+
+const userPoints = ref(50)
+const dailyFreeCount = ref(3)
+const quotaUsed = ref('')
+const showQuotaWarning = ref(false)
+const showQuotaDialog = ref(false)
+const pointsPackages = ref([])
 
 // 显示的卡牌数量
 const displayCards = computed(() => {
@@ -264,6 +314,34 @@ const allRevealed = computed(() => {
   const count = spreadType.value === 'one' ? 1 : 3
   return revealed.value.slice(0, count).every(r => r)
 })
+
+onMounted(async () => {
+  await loadUserInfo()
+  await loadPointsPackages()
+})
+
+const loadUserInfo = async () => {
+  try {
+    const res = await userStore.getUserInfo()
+    if (res) {
+      userPoints.value = userStore.userInfo?.points || 50
+      dailyFreeCount.value = userStore.userInfo?.dailyFreeCount || 3
+    }
+  } catch (err) {
+    console.error('加载用户信息失败:', err)
+  }
+}
+
+const loadPointsPackages = async () => {
+  try {
+    const res = await pointsApi.getPackages()
+    if (res.code === 200) {
+      pointsPackages.value = res.data
+    }
+  } catch (err) {
+    console.error('加载积分包失败:', err)
+  }
+}
 
 // 下一步
 const nextStep = () => {
@@ -303,6 +381,18 @@ const revealCard = async (index) => {
         cards.value = res.data.cards
         readingId.value = res.data.readingId
         interpretation.value = res.data.freeInterpretation
+        quotaUsed.value = res.data.usedQuota
+        userPoints.value = res.data.remaining || userPoints.value
+        
+        // 更新免费额度
+        if (quotaUsed.value === 'free') {
+          dailyFreeCount.value -= 1
+        }
+      } else if (res.code === 2001) {
+        // 额度不足
+        closeToast()
+        showQuotaDialog.value = true
+        return
       }
     } catch (err) {
       closeToast()
@@ -327,7 +417,6 @@ const getReading = async () => {
       
       if (isPaid.value) {
         detailInterpretation.value = res.data.detailInterpretation
-        advice.value = res.data.advice || []
       }
       
       step.value = 2
@@ -357,7 +446,6 @@ const unlockDetail = async () => {
       if (readingRes.code === 200) {
         isPaid.value = true
         detailInterpretation.value = readingRes.data.detailInterpretation
-        advice.value = readingRes.data.advice || []
       }
     }
   } catch (err) {
@@ -377,12 +465,7 @@ const reset = () => {
   readingId.value = ''
   isPaid.value = false
   detailInterpretation.value = ''
-  advice.value = []
-}
-
-// 分享
-const share = () => {
-  showToast('分享功能开发中')
+  quotaUsed.value = ''
 }
 
 // 开始对话
@@ -391,6 +474,35 @@ const startChat = () => {
     path: '/chat',
     query: { readingId: readingId.value }
   })
+}
+
+// 显示积分购买
+const showPointsPurchase = () => {
+  showQuotaDialog.value = true
+}
+
+// 选择积分包
+const selectPackage = async (pkg) => {
+  try {
+    const res = await pointsApi.buy(pkg.id)
+    
+    if (res.code === 200 && res.data.mockPaySuccess) {
+      await payApi.mockSuccess(res.data.orderId)
+      
+      showToast('购买成功')
+      showQuotaDialog.value = false
+      
+      // 重新加载用户信息
+      await loadUserInfo()
+    }
+  } catch (err) {
+    showToast('购买失败')
+  }
+}
+
+// 前往积分页面
+const goToPoints = () => {
+  showQuotaDialog.value = false
 }
 
 // 获取位置名称
@@ -402,18 +514,10 @@ const getPositionName = (index) => {
 
 // 获取卡牌emoji
 const getCardEmoji = (card) => {
-  const emojiMap = {
-    '愚者': '🃏', '魔术师': '🎩', '女祭司': '🔮', '女皇': '👑',
-    '皇帝': '⚔️', '恋人': '💕', '战车': '🏎️', '力量': '🦁',
-    '星星': '⭐', '月亮': '🌙', '太阳': '☀️', '世界': '🌍'
-  }
-  
-  // 从card.keyword提取主要词汇
   if (card.keyword?.includes('成功')) return '✨'
   if (card.keyword?.includes('爱')) return '💕'
   if (card.keyword?.includes('智慧')) return '🔮'
-  
-  return emojiMap[card.nameZh] || '🃏'
+  return '🃏'
 }
 </script>
 
@@ -422,6 +526,23 @@ const getCardEmoji = (card) => {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding-bottom: 60px;
+}
+
+.points-info {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  color: #667eea;
+}
+
+.quota-info {
+  margin-bottom: 15px;
+}
+
+.quota-used {
+  text-align: center;
+  margin-bottom: 15px;
 }
 
 .steps-container {
@@ -444,15 +565,6 @@ const getCardEmoji = (card) => {
   font-size: 18px;
   font-weight: bold;
   color: #333;
-  margin-bottom: 15px;
-}
-
-.tips {
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 10px;
-  padding: 12px 15px;
-  font-size: 14px;
-  color: #666;
   margin-bottom: 15px;
 }
 
@@ -651,26 +763,6 @@ const getCardEmoji = (card) => {
   margin-bottom: 20px;
 }
 
-.advice-section {
-  margin-top: 20px;
-}
-
-.advice-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.advice-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px;
-  background: #f0f5ff;
-  border-radius: 8px;
-  color: #666;
-}
-
 .chat-entry {
   margin-top: 20px;
 }
@@ -680,5 +772,53 @@ const getCardEmoji = (card) => {
   flex-direction: column;
   gap: 10px;
   margin-top: 20px;
+}
+
+/* 积分对话框 */
+.quota-dialog-content {
+  padding: 20px;
+  text-align: center;
+}
+
+.quota-dialog-content p {
+  margin-bottom: 10px;
+  color: #666;
+}
+
+.points-packages {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.package-item {
+  flex: 1;
+  padding: 15px;
+  border: 2px solid #f0f0f0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.package-item.recommend {
+  border-color: #667eea;
+  background: linear-gradient(135deg, #667eea10 0%, #764ba210 100%);
+}
+
+.package-item:hover {
+  transform: translateY(-3px);
+}
+
+.package-item .points {
+  font-size: 16px;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 5px;
+}
+
+.package-item .price {
+  font-size: 18px;
+  font-weight: bold;
+  color: #667eea;
 }
 </style>

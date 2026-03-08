@@ -2,13 +2,14 @@ const express = require('express')
 const router = express.Router()
 const TarotReading = require('../models/TarotReading')
 const Order = require('../models/Order')
+const User = require('../models/User')
 const tarotService = require('../services/tarotService')
 const aiService = require('../services/aiService')
 const authMiddleware = require('../middleware/auth')
 
 /**
  * POST /api/tarot/draw
- * 抽取塔罗牌
+ * 抽取塔罗牌（使用积分或免费额度）
  */
 router.post('/draw', authMiddleware, async (req, res) => {
   try {
@@ -24,23 +25,49 @@ router.post('/draw', authMiddleware, async (req, res) => {
       return res.status(400).json({ code: 1001, message: '问题不能超过200字' })
     }
     
+    // 获取用户信息
+    const user = await User.findById(userId)
+    if (!user) {
+      return res.status(404).json({ code: 1002, message: '用户不存在' })
+    }
+    
+    // 检查是否有免费额度或积分
+    if (!user.hasFreeQuota()) {
+      return res.status(403).json({ 
+        code: 2001, 
+        message: '免费额度已用完，请充值积分或购买会员',
+        data: {
+          needPay: true,
+          points: user.points,
+          dailyFreeCount: user.dailyFreeCount
+        }
+      })
+    }
+    
+    // 消耗额度
+    const quotaResult = user.useQuota()
+    await user.save()
+    
     // 抽牌
     const cards = tarotService.drawCards(spreadType)
-    const price = tarotService.getPrice(spreadType)
     
     // AI解读
     let interpretation = ''
     let freeInterpretation = ''
     
     if (spreadType === 'single') {
-      // 单张牌免费
+      // 单张牌免费完整解读
       const aiResult = await aiService.interpretTarot(cards, question)
       interpretation = aiResult.interpretation
       freeInterpretation = aiResult.summary
     } else {
-      // 多张牌需要付费
+      // 多张牌需要付费解锁详细解读
       freeInterpretation = '牌面显示，你正处在一个重要的转折点。详细解读将为你分析每张牌的具体含义...'
     }
+    
+    // 更新统计
+    user.stats.tarotCount += 1
+    await user.save()
     
     // 保存记录
     const reading = await TarotReading.create({
@@ -50,7 +77,8 @@ router.post('/draw', authMiddleware, async (req, res) => {
       cards,
       interpretation: interpretation || '付费后可见',
       freeInterpretation,
-      isPaid: price === 0
+      isPaid: spreadType === 'single', // 单张牌默认已付费
+      usedQuota: quotaResult.used
     })
     
     res.json({
@@ -62,10 +90,12 @@ router.post('/draw', authMiddleware, async (req, res) => {
         question,
         cards,
         freeInterpretation,
+        usedQuota: quotaResult.used,
+        remaining: quotaResult.remaining,
         paid: {
-          isUnlocked: price === 0,
+          isUnlocked: spreadType === 'single',
           preview: '详细解读包含每张牌的深度分析...',
-          price
+          price: 9.9
         }
       }
     })
@@ -77,7 +107,7 @@ router.post('/draw', authMiddleware, async (req, res) => {
 
 /**
  * POST /api/tarot/unlock
- * 解锁详细解读
+ * 解锁详细解读（支付）
  */
 router.post('/unlock', authMiddleware, async (req, res) => {
   try {
@@ -98,33 +128,29 @@ router.post('/unlock', authMiddleware, async (req, res) => {
       return res.status(400).json({ code: 4001, message: '已解锁' })
     }
     
-    // 计算价格
-    const price = tarotService.getPrice(reading.spreadType)
-    
     // 创建订单
-    const orderNo = Order.generateOrderNo()
-    const order = await Order.create({
-      orderNo,
+    const order = new Order({
       userId,
-      type: 'tarot',
-      subType: reading.spreadType,
-      amount: price,
-      actualAmount: price,
+      orderNo: 'TAROT' + Date.now() + Math.random().toString(36).substr(2, 6).toUpperCase(),
+      productType: 'tarot',
+      productId: readingId,
+      productName: '塔罗详细解读',
+      originalAmount: 9.9,
+      actualAmount: 9.9,
       payMethod,
-      resourceId: readingId
+      payStatus: 'pending'
     })
     
-    // TODO: 调用支付接口生成支付链接
+    await order.save()
     
     res.json({
       code: 200,
       message: '订单创建成功',
       data: {
         orderId: order._id,
-        orderNo,
-        amount: price,
-        payUrl: 'weixin://wxpay/...',
-        qrcodeUrl: 'https://api.pay.com/qrcode/...'
+        orderNo: order.orderNo,
+        amount: 9.9,
+        mockPaySuccess: true // 模拟支付
       }
     })
   } catch (err) {
@@ -135,14 +161,17 @@ router.post('/unlock', authMiddleware, async (req, res) => {
 
 /**
  * POST /api/tarot/chat
- * AI对话（付费用户专属）
+ * AI对话
  */
 router.post('/chat', authMiddleware, async (req, res) => {
   try {
     const { readingId, message } = req.body
     const userId = req.userId
     
-    // 查询reading
+    if (!message || message.trim().length === 0) {
+      return res.status(400).json({ code: 1001, message: '请输入消息' })
+    }
+    
     const reading = await TarotReading.findById(readingId)
     if (!reading) {
       return res.status(404).json({ code: 3002, message: '记录不存在' })
@@ -227,8 +256,8 @@ router.get('/:id', authMiddleware, async (req, res) => {
       data: reading
     })
   } catch (err) {
-    console.error('获取详情失败:', err)
-    res.status(500).json({ code: 1003, message: '获取详情失败' })
+    console.error('获取解读失败:', err)
+    res.status(500).json({ code: 1003, message: '获取解读失败' })
   }
 })
 

@@ -1,103 +1,141 @@
 const mongoose = require('mongoose')
-const Schema = mongoose.Schema
 
-const UserSchema = new Schema({
-  openid: {
-    type: String,
-    required: true,
+const userSchema = new mongoose.Schema({
+  phone: { 
+    type: String, 
+    required: true, 
     unique: true,
-    index: true
-  },
-  unionid: String,
-  phone: {
-    type: String,
-    sparse: true,
-    unique: true
+    match: /^1[3-9]\d{9}$/
   },
   nickname: {
     type: String,
-    default: '神秘用户'
+    default: ''
   },
   avatar: {
     type: String,
-    default: '/images/default-avatar.png'
+    default: ''
   },
   gender: {
     type: Number,
-    enum: [0, 1, 2],
-    default: 0
+    enum: [1, 2], // 1-男，2-女
+    default: 1
   },
   zodiac: {
     type: String,
-    enum: ['aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo',
-           'libra', 'scorpio', 'sagittarius', 'capricorn', 
-           'aquarius', 'pisces']
+    default: ''
   },
-  birthDate: Date,
-  birthTime: String,
-  birthPlace: String,
+  birthDate: {
+    type: String,
+    default: ''
+  },
+  birthTime: {
+    type: String,
+    default: ''
+  },
+  
+  // 积分系统
+  points: {
+    type: Number,
+    default: 50 // 新用户注册送50积分
+  },
+  
+  // 每日免费额度
+  dailyFreeCount: {
+    type: Number,
+    default: 3 // 每天3个免费额度
+  },
+  lastFreeResetDate: {
+    type: Date,
+    default: () => new Date() // 上次重置日期
+  },
   
   // 会员信息
   isMember: {
     type: Boolean,
     default: false
   },
-  memberLevel: {
-    type: Number,
-    default: 0
-  },
-  memberExpireAt: Date,
-  
-  // 账户信息
-  balance: {
-    type: Number,
-    default: 0,
-    min: 0
-  },
-  totalSpent: {
-    type: Number,
-    default: 0,
-    min: 0
+  memberExpireTime: {
+    type: Date,
+    default: null
   },
   
-  // 统计信息
-  tarotCount: {
-    type: Number,
-    default: 0
-  },
-  zodiacCount: {
-    type: Number,
-    default: 0
-  },
-  baziCount: {
-    type: Number,
-    default: 0
+  // 统计数据
+  stats: {
+    tarotCount: { type: Number, default: 0 },
+    zodiacCount: { type: Number, default: 0 },
+    baziCount: { type: Number, default: 0 }
   },
   
-  // 设备信息
-  lastLoginAt: Date,
-  lastLoginIp: String,
-  deviceInfo: {
-    platform: String,
-    model: String,
-    osVersion: String,
-    appVersion: String
+  createdAt: {
+    type: Date,
+    default: () => new Date()
   },
-  
-  // 元数据
-  status: {
-    type: String,
-    enum: ['active', 'banned', 'deleted'],
-    default: 'active'
+  updatedAt: {
+    type: Date,
+    default: () => new Date()
   }
-}, {
-  timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' }
 })
 
-// 索引
-UserSchema.index({ openid: 1 }, { unique: true })
-UserSchema.index({ phone: 1 }, { sparse: true, unique: true })
-UserSchema.index({ createdAt: -1 })
-UserSchema.index({ lastLoginAt: -1 })
+// 重置每日免费额度
+userSchema.methods.resetDailyFreeCount = function() {
+  const today = new Date()
+  const lastReset = new Date(this.lastFreeResetDate)
+  
+  // 如果不是同一天，重置免费额度
+  if (today.toDateString() !== lastReset.toDateString()) {
+    this.dailyFreeCount = 3
+    this.lastFreeResetDate = today
+    return true
+  }
+  
+  return false
+}
 
-module.exports = mongoose.model('User', UserSchema)
+// 检查是否有免费额度
+userSchema.methods.hasFreeQuota = function() {
+  this.resetDailyFreeCount()
+  return this.dailyFreeCount > 0 || this.points >= 10
+}
+
+// 消耗免费额度或积分
+userSchema.methods.useQuota = function() {
+  this.resetDailyFreeCount()
+  
+  // 优先使用每日免费额度
+  if (this.dailyFreeCount > 0) {
+    this.dailyFreeCount -= 1
+    return { used: 'free', remaining: this.dailyFreeCount }
+  }
+  
+  // 使用积分
+  if (this.points >= 10) {
+    this.points -= 10
+    return { used: 'points', remaining: this.points }
+  }
+  
+  return null // 没有可用额度
+}
+
+// 充值积分
+userSchema.methods.addPoints = function(amount) {
+  this.points += amount
+  return this.points
+}
+
+// 设置会员
+userSchema.methods.setMember = function(days) {
+  const now = new Date()
+  
+  // 如果已经是会员，延长有效期
+  if (this.isMember && this.memberExpireTime > now) {
+    this.memberExpireTime = new Date(this.memberExpireTime.getTime() + days * 24 * 60 * 60 * 1000)
+  } else {
+    // 新会员
+    this.isMember = true
+    this.memberExpireTime = new Date(now.getTime() + days * 24 * 60 * 60 * 1000)
+  }
+  
+  return this.memberExpireTime
+}
+
+module.exports = mongoose.model('User', userSchema)

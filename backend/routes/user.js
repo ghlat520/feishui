@@ -1,9 +1,10 @@
 const express = require('express')
 const router = express.Router()
 const User = require('../models/User')
-const Order = require('../models/Order')
 const TarotReading = require('../models/TarotReading')
+const ZodiacLog = require('../models/ZodiacLog')
 const BaziReading = require('../models/BaziReading')
+const Order = require('../models/Order')
 const authMiddleware = require('../middleware/auth')
 
 /**
@@ -16,50 +17,31 @@ router.get('/profile', authMiddleware, async (req, res) => {
     
     const user = await User.findById(userId)
     if (!user) {
-      return res.status(404).json({ code: 3001, message: '用户不存在' })
+      return res.status(404).json({ code: 1002, message: '用户不存在' })
     }
-    
-    // 获取最近占卜记录
-    const recentReadings = await TarotReading.find({ userId })
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .select('question spreadType createdAt')
     
     res.json({
       code: 200,
       data: {
         id: user._id,
-        phone: user.phone?.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2'),
+        phone: user.phone,
         nickname: user.nickname,
         avatar: user.avatar,
         gender: user.gender,
         zodiac: user.zodiac,
         birthDate: user.birthDate,
-        
+        birthTime: user.birthTime,
+        points: user.points,
+        dailyFreeCount: user.dailyFreeCount,
         isMember: user.isMember,
-        memberLevel: user.memberLevel,
-        memberExpireAt: user.memberExpireAt,
-        
-        balance: user.balance,
-        totalSpent: user.totalSpent,
-        
-        stats: {
-          tarotCount: user.tarotCount,
-          zodiacCount: user.zodiacCount,
-          baziCount: user.baziCount
-        },
-        
-        recentReadings: recentReadings.map(r => ({
-          type: 'tarot',
-          question: r.question,
-          spreadType: r.spreadType,
-          createdAt: r.createdAt
-        }))
+        memberExpireTime: user.memberExpireTime,
+        stats: user.stats,
+        createdAt: user.createdAt
       }
     })
   } catch (err) {
     console.error('获取用户信息失败:', err)
-    res.status(500).json({ code: 1003, message: '获取失败，请稍后再试' })
+    res.status(500).json({ code: 1003, message: '获取用户信息失败' })
   }
 })
 
@@ -70,23 +52,21 @@ router.get('/profile', authMiddleware, async (req, res) => {
 router.put('/profile', authMiddleware, async (req, res) => {
   try {
     const userId = req.userId
-    const { nickname, avatar, zodiac, birthDate, birthTime } = req.body
+    const { nickname, avatar, zodiac, birthDate, birthTime, gender } = req.body
     
     const updateData = {}
-    if (nickname) updateData.nickname = nickname
-    if (avatar) updateData.avatar = avatar
-    if (zodiac) updateData.zodiac = zodiac
-    if (birthDate) updateData.birthDate = birthDate
-    if (birthTime) updateData.birthTime = birthTime
+    if (nickname !== undefined) updateData.nickname = nickname
+    if (avatar !== undefined) updateData.avatar = avatar
+    if (zodiac !== undefined) updateData.zodiac = zodiac
+    if (birthDate !== undefined) updateData.birthDate = birthDate
+    if (birthTime !== undefined) updateData.birthTime = birthTime
+    if (gender !== undefined) updateData.gender = gender
     
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { $set: updateData },
-      { new: true }
-    )
+    updateData.updatedAt = new Date()
     
+    const user = await User.findByIdAndUpdate(userId, updateData, { new: true })
     if (!user) {
-      return res.status(404).json({ code: 3001, message: '用户不存在' })
+      return res.status(404).json({ code: 1002, message: '用户不存在' })
     }
     
     res.json({
@@ -96,13 +76,15 @@ router.put('/profile', authMiddleware, async (req, res) => {
         id: user._id,
         nickname: user.nickname,
         avatar: user.avatar,
+        gender: user.gender,
         zodiac: user.zodiac,
-        birthDate: user.birthDate
+        points: user.points,
+        dailyFreeCount: user.dailyFreeCount
       }
     })
   } catch (err) {
     console.error('更新用户信息失败:', err)
-    res.status(500).json({ code: 1003, message: '更新失败，请稍后再试' })
+    res.status(500).json({ code: 1003, message: '更新用户信息失败' })
   }
 })
 
@@ -121,34 +103,22 @@ router.get('/orders', authMiddleware, async (req, res) => {
     const orders = await Order.find(query)
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
-      .limit(parseInt(limit))
-      .select('orderNo type amount payStatus payTime createdAt')
+      .limit(Number(limit))
     
     const total = await Order.countDocuments(query)
     
     res.json({
       code: 200,
       data: {
-        orders: orders.map(o => ({
-          id: o._id,
-          orderNo: o.orderNo,
-          type: o.type,
-          amount: o.amount,
-          payStatus: o.payStatus,
-          payTime: o.payTime,
-          createdAt: o.createdAt
-        })),
-        pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total,
-          pages: Math.ceil(total / limit)
-        }
+        list: orders,
+        total,
+        page: Number(page),
+        limit: Number(limit)
       }
     })
   } catch (err) {
-    console.error('获取订单失败:', err)
-    res.status(500).json({ code: 1003, message: '获取失败，请稍后再试' })
+    console.error('获取订单列表失败:', err)
+    res.status(500).json({ code: 1003, message: '获取订单列表失败' })
   }
 })
 
@@ -162,33 +132,40 @@ router.get('/readings', authMiddleware, async (req, res) => {
     const { type = 'tarot', page = 1, limit = 20 } = req.query
     
     let readings
+    let total
+    
     if (type === 'tarot') {
       readings = await TarotReading.find({ userId })
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
-        .limit(parseInt(limit))
-        .select('question spreadType isPaid createdAt')
+        .limit(Number(limit))
+      total = await TarotReading.countDocuments({ userId })
+    } else if (type === 'zodiac') {
+      readings = await ZodiacLog.find({ userId })
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(Number(limit))
+      total = await ZodiacLog.countDocuments({ userId })
     } else if (type === 'bazi') {
       readings = await BaziReading.find({ userId })
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
-        .limit(parseInt(limit))
-        .select('birthDate bazi isPaid createdAt')
+        .limit(Number(limit))
+      total = await BaziReading.countDocuments({ userId })
     }
     
     res.json({
       code: 200,
       data: {
-        readings,
-        pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit)
-        }
+        list: readings,
+        total,
+        page: Number(page),
+        limit: Number(limit)
       }
     })
   } catch (err) {
-    console.error('获取记录失败:', err)
-    res.status(500).json({ code: 1003, message: '获取失败，请稍后再试' })
+    console.error('获取占卜记录失败:', err)
+    res.status(500).json({ code: 1003, message: '获取占卜记录失败' })
   }
 })
 
@@ -199,43 +176,46 @@ router.get('/readings', authMiddleware, async (req, res) => {
 router.post('/member/buy', authMiddleware, async (req, res) => {
   try {
     const userId = req.userId
-    const { days = 30, payMethod = 'wechat' } = req.body
+    const { days = 30 } = req.body
+    
+    const user = await User.findById(userId)
+    if (!user) {
+      return res.status(404).json({ code: 1002, message: '用户不存在' })
+    }
     
     // 计算价格
-    let amount
-    if (days === 30) amount = 1990       // 19.9元/月
-    else if (days === 90) amount = 4990  // 49.9元/季
-    else if (days === 365) amount = 19990 // 199元/年
-    else amount = Math.ceil(days / 30) * 1990
+    const price = days === 30 ? 19.9 : (days === 365 ? 199 : 19.9)
     
     // 创建订单
-    const orderNo = Order.generateOrderNo()
-    const order = await Order.create({
-      orderNo,
+    const order = new Order({
       userId,
-      type: 'member',
-      amount,
-      actualAmount: amount,
-      payMethod,
-      extra: { memberDays: days }
+      orderNo: 'MEM' + Date.now() + Math.random().toString(36).substr(2, 6).toUpperCase(),
+      productType: 'member',
+      productName: days === 30 ? '月度会员' : '年度会员',
+      originalAmount: price,
+      actualAmount: price,
+      payMethod: 'wechat',
+      payStatus: 'pending'
     })
+    
+    await order.save()
     
     res.json({
       code: 200,
       message: '订单创建成功',
       data: {
         orderId: order._id,
-        orderNo,
-        amount,
-        days,
-        payUrl: 'weixin://wxpay/mock',
-        qrcodeUrl: 'https://mock.pay.com/qrcode',
+        orderNo: order.orderNo,
+        amount: price,
+        
+        // 模拟支付
+        mockMode: true,
         mockPaySuccess: true
       }
     })
   } catch (err) {
     console.error('购买会员失败:', err)
-    res.status(500).json({ code: 1003, message: '购买失败，请稍后再试' })
+    res.status(500).json({ code: 1003, message: '购买会员失败' })
   }
 })
 
