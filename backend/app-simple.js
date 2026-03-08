@@ -6,38 +6,37 @@ require('dotenv').config()
 
 const app = express()
 
+// 信任代理
+app.set('trust proxy', 1)
+
 // 安全中间件
 app.use(helmet())
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000'],
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://your-domain.com'] 
+    : ['http://localhost:5173', 'http://localhost:3000'],
   credentials: true
 }))
 
 // 日志
-app.use(morgan('combined'))
+if (process.env.NODE_ENV !== 'test') {
+  app.use(morgan('combined'))
+}
 
 // Body解析
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true }))
 
 // 健康检查
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    mode: 'memory-db'
-  })
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
-// Mock模型注入
+// 使用Mock模型（内存数据库）
+console.log('⚠️  使用内存数据库（测试模式）')
 const mockModels = require('./models/mock')
-require.cache[require.resolve('./models/User')] = { exports: mockModels.User }
-require.cache[require.resolve('./models/Order')] = { exports: mockModels.Order }
-require.cache[require.resolve('./models/TarotReading')] = { exports: mockModels.TarotReading }
-require.cache[require.resolve('./models/ZodiacLog')] = { exports: mockModels.ZodiacLog }
-require.cache[require.resolve('./models/BaziReading')] = { exports: mockModels.BaziReading }
 
-// 路由
+// 路由（使用Mock模型）
 try {
   app.use('/api/auth', require('./routes/auth'))
   app.use('/api/zodiac', require('./routes/zodiac'))
@@ -50,11 +49,6 @@ try {
   console.error('❌ 路由注册失败:', err)
 }
 
-// 404处理
-app.use((req, res) => {
-  res.status(404).json({ code: 404, message: '接口不存在' })
-})
-
 // 错误处理
 app.use((err, req, res, next) => {
   console.error('Error:', err)
@@ -64,15 +58,20 @@ app.use((err, req, res, next) => {
   })
 })
 
+// 404处理
+app.use((req, res) => {
+  res.status(404).json({
+    code: 404,
+    message: '接口不存在'
+  })
+})
+
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
   console.log(`\n🦞 AI命运守护神服务器运行中`)
   console.log(`📍 端口: ${PORT}`)
   console.log(`🌍 环境: ${process.env.NODE_ENV || 'development'}`)
-  console.log(`💾 数据库: 内存模式（测试）`)
   console.log(`⏰ 时间: ${new Date().toLocaleString('zh-CN')}\n`)
-  console.log(`🔗 访问: http://localhost:${PORT}/health`)
-  console.log(`🎨 前端: http://localhost:5173\n`)
 })
 
 module.exports = app
