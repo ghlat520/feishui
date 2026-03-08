@@ -6,20 +6,20 @@
       @click-left="router.back()"
     >
       <template #right>
-        <div class="points-info">
-          <van-icon name="gem-o" /> {{ userPoints }}
+        <div class="quota-info">
+          今日免费：{{ dailyFreeCount }}/3
         </div>
       </template>
     </van-nav-bar>
 
-    <!-- 积分不足提示 -->
+    <!-- 额度不足提示 -->
     <van-notice-bar
-      v-if="showQuotaWarning"
+      v-if="dailyFreeCount === 0"
       color="#ff6b6b"
       background="#fff5f5"
       left-icon="info-o"
     >
-      免费额度已用完，需要10积分或充值
+      今日免费额度已用完，分享可获得+1次机会
     </van-notice-bar>
 
     <!-- 步骤条 -->
@@ -33,13 +33,6 @@
 
     <!-- 步骤1：输入问题 -->
     <div v-if="step === 0" class="step-content">
-      <div class="quota-info">
-        <van-cell-group inset>
-          <van-cell title="今日免费额度" :value="`${dailyFreeCount}/3`" icon="gift-o" />
-          <van-cell title="我的积分" :value="userPoints" icon="gem-o" />
-        </van-cell-group>
-      </div>
-
       <div class="section">
         <div class="title">🔮 你想探索什么？</div>
         <van-field
@@ -145,12 +138,6 @@
     <!-- 步骤3：AI解读 -->
     <div v-if="step === 2" class="step-content">
       <div class="reading-result">
-        <div class="quota-used">
-          <van-tag :type="quotaUsed === 'free' ? 'success' : 'primary'">
-            {{ quotaUsed === 'free' ? '已使用免费额度' : '已消耗10积分' }}
-          </van-tag>
-        </div>
-
         <div class="section">
           <div class="title">🎯 你的问题</div>
           <div class="question-text">{{ question }}</div>
@@ -224,41 +211,28 @@
             重新占卜
           </van-button>
           <van-button 
-            v-if="userPoints < 10"
             plain 
             type="warning" 
             block 
             round 
-            @click="showPointsPurchase"
+            @click="handleShare"
           >
-            充值积分
+            分享给朋友（+1次免费额度）
           </van-button>
         </div>
       </div>
     </div>
 
-    <!-- 积分不足弹窗 -->
+    <!-- 分享成功弹窗 -->
     <van-dialog
-      v-model:show="showQuotaDialog"
-      title="额度不足"
-      show-cancel-button
-      @confirm="goToPoints"
+      v-model:show="showShareDialog"
+      title="分享成功"
+      confirm-button-text="太棒了"
     >
-      <div class="quota-dialog-content">
-        <p>您的免费额度和积分已用完</p>
-        <p>充值积分可继续占卜</p>
-        <div class="points-packages">
-          <div 
-            v-for="pkg in pointsPackages" 
-            :key="pkg.id"
-            class="package-item"
-            :class="{ recommend: pkg.recommend }"
-            @click="selectPackage(pkg)"
-          >
-            <div class="points">{{ pkg.points }}积分</div>
-            <div class="price">¥{{ pkg.price }}</div>
-          </div>
-        </div>
+      <div class="share-dialog-content">
+        <van-icon name="gift-o" size="60" color="#667eea" />
+        <p>恭喜你获得1次免费占卜机会！</p>
+        <p>今日剩余额度：{{ dailyFreeCount }}/3</p>
       </div>
     </van-dialog>
 
@@ -273,10 +247,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast, showLoadingToast, closeToast, showConfirmDialog } from 'vant'
+import { showToast, showLoadingToast, closeToast } from 'vant'
 import { tarotApi } from '@/api/tarot'
 import { payApi } from '@/api/pay'
-import { pointsApi } from '@/api/points'
+import { shareApi } from '@/api/share'
 import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
@@ -295,12 +269,8 @@ const isPaid = ref(false)
 const unlockLoading = ref(false)
 const detailInterpretation = ref('')
 
-const userPoints = ref(50)
 const dailyFreeCount = ref(3)
-const quotaUsed = ref('')
-const showQuotaWarning = ref(false)
-const showQuotaDialog = ref(false)
-const pointsPackages = ref([])
+const showShareDialog = ref(false)
 
 // 显示的卡牌数量
 const displayCards = computed(() => {
@@ -317,29 +287,14 @@ const allRevealed = computed(() => {
 
 onMounted(async () => {
   await loadUserInfo()
-  await loadPointsPackages()
 })
 
 const loadUserInfo = async () => {
   try {
-    const res = await userStore.getUserInfo()
-    if (res) {
-      userPoints.value = userStore.userInfo?.points || 50
-      dailyFreeCount.value = userStore.userInfo?.dailyFreeCount || 3
-    }
+    await userStore.getUserInfo()
+    dailyFreeCount.value = userStore.userInfo?.dailyFreeCount || 3
   } catch (err) {
     console.error('加载用户信息失败:', err)
-  }
-}
-
-const loadPointsPackages = async () => {
-  try {
-    const res = await pointsApi.getPackages()
-    if (res.code === 200) {
-      pointsPackages.value = res.data
-    }
-  } catch (err) {
-    console.error('加载积分包失败:', err)
   }
 }
 
@@ -381,17 +336,11 @@ const revealCard = async (index) => {
         cards.value = res.data.cards
         readingId.value = res.data.readingId
         interpretation.value = res.data.freeInterpretation
-        quotaUsed.value = res.data.usedQuota
-        userPoints.value = res.data.remaining || userPoints.value
-        
-        // 更新免费额度
-        if (quotaUsed.value === 'free') {
-          dailyFreeCount.value -= 1
-        }
+        dailyFreeCount.value = res.data.dailyFreeCount
       } else if (res.code === 2001) {
         // 额度不足
         closeToast()
-        showQuotaDialog.value = true
+        showToast('今日免费额度已用完')
         return
       }
     } catch (err) {
@@ -465,7 +414,6 @@ const reset = () => {
   readingId.value = ''
   isPaid.value = false
   detailInterpretation.value = ''
-  quotaUsed.value = ''
 }
 
 // 开始对话
@@ -476,33 +424,29 @@ const startChat = () => {
   })
 }
 
-// 显示积分购买
-const showPointsPurchase = () => {
-  showQuotaDialog.value = true
-}
-
-// 选择积分包
-const selectPackage = async (pkg) => {
+// 分享功能
+const handleShare = async () => {
   try {
-    const res = await pointsApi.buy(pkg.id)
+    showLoadingToast({
+      message: '分享中...',
+      forbidClick: true,
+    })
     
-    if (res.code === 200 && res.data.mockPaySuccess) {
-      await payApi.mockSuccess(res.data.orderId)
-      
-      showToast('购买成功')
-      showQuotaDialog.value = false
-      
-      // 重新加载用户信息
-      await loadUserInfo()
+    // 调用分享API
+    const res = await shareApi.getReward('wechat')
+    
+    closeToast()
+    
+    if (res.code === 200) {
+      dailyFreeCount.value = res.data.dailyFreeCount
+      showShareDialog.value = true
+    } else if (res.code === 4001) {
+      showToast('今天已经分享过了')
     }
   } catch (err) {
-    showToast('购买失败')
+    closeToast()
+    showToast('分享失败')
   }
-}
-
-// 前往积分页面
-const goToPoints = () => {
-  showQuotaDialog.value = false
 }
 
 // 获取位置名称
@@ -528,21 +472,10 @@ const getCardEmoji = (card) => {
   padding-bottom: 60px;
 }
 
-.points-info {
-  display: flex;
-  align-items: center;
-  gap: 5px;
+.quota-info {
   font-size: 14px;
   color: #667eea;
-}
-
-.quota-info {
-  margin-bottom: 15px;
-}
-
-.quota-used {
-  text-align: center;
-  margin-bottom: 15px;
+  font-weight: bold;
 }
 
 .steps-container {
@@ -774,51 +707,18 @@ const getCardEmoji = (card) => {
   margin-top: 20px;
 }
 
-/* 积分对话框 */
-.quota-dialog-content {
-  padding: 20px;
+/* 分享对话框 */
+.share-dialog-content {
+  padding: 30px 20px;
   text-align: center;
 }
 
-.quota-dialog-content p {
+.share-dialog-content .van-icon {
+  margin-bottom: 20px;
+}
+
+.share-dialog-content p {
   margin-bottom: 10px;
   color: #666;
-}
-
-.points-packages {
-  display: flex;
-  gap: 10px;
-  margin-top: 15px;
-}
-
-.package-item {
-  flex: 1;
-  padding: 15px;
-  border: 2px solid #f0f0f0;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.package-item.recommend {
-  border-color: #667eea;
-  background: linear-gradient(135deg, #667eea10 0%, #764ba210 100%);
-}
-
-.package-item:hover {
-  transform: translateY(-3px);
-}
-
-.package-item .points {
-  font-size: 16px;
-  font-weight: bold;
-  color: #333;
-  margin-bottom: 5px;
-}
-
-.package-item .price {
-  font-size: 18px;
-  font-weight: bold;
-  color: #667eea;
 }
 </style>

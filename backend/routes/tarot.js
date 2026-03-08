@@ -9,7 +9,7 @@ const authMiddleware = require('../middleware/auth')
 
 /**
  * POST /api/tarot/draw
- * 抽取塔罗牌（使用积分或免费额度）
+ * 抽取塔罗牌（使用免费额度）
  */
 router.post('/draw', authMiddleware, async (req, res) => {
   try {
@@ -31,14 +31,13 @@ router.post('/draw', authMiddleware, async (req, res) => {
       return res.status(404).json({ code: 1002, message: '用户不存在' })
     }
     
-    // 检查是否有免费额度或积分
+    // 检查是否有免费额度
     if (!user.hasFreeQuota()) {
       return res.status(403).json({ 
         code: 2001, 
-        message: '免费额度已用完，请充值积分或购买会员',
+        message: '今日免费额度已用完，明天再来或分享获取更多机会',
         data: {
           needPay: true,
-          points: user.points,
           dailyFreeCount: user.dailyFreeCount
         }
       })
@@ -77,8 +76,7 @@ router.post('/draw', authMiddleware, async (req, res) => {
       cards,
       interpretation: interpretation || '付费后可见',
       freeInterpretation,
-      isPaid: spreadType === 'single', // 单张牌默认已付费
-      usedQuota: quotaResult.used
+      isPaid: spreadType === 'single' // 单张牌默认已付费
     })
     
     res.json({
@@ -90,8 +88,7 @@ router.post('/draw', authMiddleware, async (req, res) => {
         question,
         cards,
         freeInterpretation,
-        usedQuota: quotaResult.used,
-        remaining: quotaResult.remaining,
+        dailyFreeCount: quotaResult.remaining,
         paid: {
           isUnlocked: spreadType === 'single',
           preview: '详细解读包含每张牌的深度分析...',

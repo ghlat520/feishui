@@ -33,12 +33,6 @@ const userSchema = new mongoose.Schema({
     default: ''
   },
   
-  // 积分系统
-  points: {
-    type: Number,
-    default: 50 // 新用户注册送50积分
-  },
-  
   // 每日免费额度
   dailyFreeCount: {
     type: Number,
@@ -64,6 +58,12 @@ const userSchema = new mongoose.Schema({
     tarotCount: { type: Number, default: 0 },
     zodiacCount: { type: Number, default: 0 },
     baziCount: { type: Number, default: 0 }
+  },
+  
+  // 分享记录
+  lastShareDate: {
+    type: Date,
+    default: null
   },
   
   createdAt: {
@@ -94,32 +94,25 @@ userSchema.methods.resetDailyFreeCount = function() {
 // 检查是否有免费额度
 userSchema.methods.hasFreeQuota = function() {
   this.resetDailyFreeCount()
-  return this.dailyFreeCount > 0 || this.points >= 10
+  return this.dailyFreeCount > 0
 }
 
-// 消耗免费额度或积分
+// 消耗免费额度
 userSchema.methods.useQuota = function() {
   this.resetDailyFreeCount()
   
-  // 优先使用每日免费额度
   if (this.dailyFreeCount > 0) {
     this.dailyFreeCount -= 1
-    return { used: 'free', remaining: this.dailyFreeCount }
+    return { success: true, remaining: this.dailyFreeCount }
   }
   
-  // 使用积分
-  if (this.points >= 10) {
-    this.points -= 10
-    return { used: 'points', remaining: this.points }
-  }
-  
-  return null // 没有可用额度
+  return { success: false, remaining: 0 }
 }
 
-// 充值积分
-userSchema.methods.addPoints = function(amount) {
-  this.points += amount
-  return this.points
+// 增加免费额度（分享奖励）
+userSchema.methods.addFreeQuota = function(count = 1) {
+  this.dailyFreeCount += count
+  return this.dailyFreeCount
 }
 
 // 设置会员
