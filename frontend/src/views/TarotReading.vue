@@ -20,22 +20,15 @@
         </div>
       </div>
 
+      <!-- MVP版本：所有内容免费开放 -->
       <div class="section">
         <div class="title">AI解读</div>
         <div class="interpretation">{{ reading?.interpretation }}</div>
       </div>
 
-      <div v-if="!reading?.isPaid" class="unlock">
-        <van-button type="primary" block round @click="unlock">
-          解锁详细解读（9.9元）
-        </van-button>
-      </div>
-
-      <div v-if="reading?.isPaid" class="paid-content">
-        <div class="section">
-          <div class="title">详细解读</div>
-          <div class="detail">{{ reading?.detail }}</div>
-        </div>
+      <div class="section">
+        <div class="title">详细解读</div>
+        <div class="detail">{{ reading?.detail || '这是一个全面的塔罗解读，涵盖了问题的各个方面。牌面显示，你目前正处于一个重要的转折点。建议保持积极心态，相信自己的直觉，勇敢面对挑战。记住，塔罗牌只是指引，真正的力量在你自己手中。' }}</div>
       </div>
     </div>
   </div>
@@ -52,7 +45,7 @@ const reading = ref(null)
 
 onMounted(async () => {
   const id = route.params.id
-  
+
   try {
     const res = await tarotApi.getReading(id)
     if (res.code === 200) {
@@ -62,18 +55,6 @@ onMounted(async () => {
     showToast('加载失败')
   }
 })
-
-const unlock = async () => {
-  try {
-    const res = await tarotApi.unlock(reading.value._id)
-    if (res.code === 200) {
-      showToast('解锁成功')
-      reading.value.isPaid = true
-    }
-  } catch (err) {
-    showToast('解锁失败')
-  }
-}
 </script>
 
 <style scoped>
@@ -137,17 +118,10 @@ const unlock = async () => {
   color: #999;
 }
 
-.interpretation {
+.interpretation,
+.detail {
   color: #666;
   line-height: 1.8;
-}
-
-.unlock {
-  margin-top: 20px;
-}
-
-.paid-content .detail {
-  color: #666;
-  line-height: 1.8;
+  text-align: justify;
 }
 </style>

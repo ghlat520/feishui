@@ -16,7 +16,7 @@
           placeholder="请选择"
           @click="showDatePicker = true"
         />
-        
+
         <van-field
           v-model="birthTime"
           is-link
@@ -37,10 +37,10 @@
       </van-cell-group>
 
       <div class="submit-btn">
-        <van-button 
-          type="primary" 
-          block 
-          round 
+        <van-button
+          type="primary"
+          block
+          round
           :loading="loading"
           :disabled="!birthDate || !birthTime"
           @click="calculate"
@@ -77,8 +77,8 @@
       <div class="section">
         <div class="title">🌟 五行分析</div>
         <div class="wuxing">
-          <div 
-            v-for="(count, element) in result.wuxing" 
+          <div
+            v-for="(count, element) in result.wuxing"
             :key="element"
             class="element"
             :class="element"
@@ -97,51 +97,37 @@
         <div class="interpretation">{{ result.freeInterpretation }}</div>
       </div>
 
-      <div v-if="!isPaid" class="section unlock-section">
-        <div class="unlock-preview">
-          <van-icon name="lock" /> 解锁详细命格分析，包含事业、财运、婚姻
-        </div>
-        <van-button 
-          type="primary" 
-          block 
-          round 
-          :loading="unlockLoading"
-          @click="unlockDetail"
-        >
-          解锁详细解读（19.9元）
-        </van-button>
-      </div>
-
-      <div v-if="isPaid" class="section paid-section">
+      <!-- MVP版本：所有内容免费开放 -->
+      <div class="section paid-section">
         <div class="title">📖 详细解读</div>
-        
+
         <div class="detail-item">
           <div class="label">💼 事业运势</div>
-          <div class="content">{{ result.detail.career }}</div>
+          <div class="content">{{ result.detail?.career || '你的事业运势正旺，适合积极进取。建议把握机会，展现自己的能力，有望获得上级的认可和提升机会。' }}</div>
         </div>
-        
+
         <div class="detail-item">
           <div class="label">💰 财运分析</div>
-          <div class="content">{{ result.detail.wealth }}</div>
+          <div class="content">{{ result.detail?.wealth || '财运平稳，正财为主。建议稳健理财，避免投机冒险。通过努力工作可以获得稳定的收入增长。' }}</div>
         </div>
-        
+
         <div class="detail-item">
           <div class="label">💕 婚姻感情</div>
-          <div class="content">{{ result.detail.marriage }}</div>
+          <div class="content">{{ result.detail?.marriage || '感情运势良好，单身者有望遇到心仪对象，已婚者家庭和睦。建议多参加社交活动，增加遇见缘分的机会。' }}</div>
         </div>
-        
+
         <div class="detail-item">
           <div class="label">🏥 健康运势</div>
-          <div class="content">{{ result.detail.health }}</div>
+          <div class="content">{{ result.detail?.health || '整体健康状况良好，但需注意作息规律。建议保持良好的生活习惯，适当运动，保持心情愉悦。' }}</div>
         </div>
       </div>
 
       <div class="action-buttons">
-        <van-button 
-          plain 
-          type="primary" 
-          block 
-          round 
+        <van-button
+          plain
+          type="primary"
+          block
+          round
           @click="reset"
         >
           重新测算
@@ -179,7 +165,6 @@
 import { ref } from 'vue'
 import { showToast, showLoadingToast, closeToast } from 'vant'
 import { baziApi } from '@/api/bazi'
-import { payApi } from '@/api/pay'
 
 const active = ref(1)
 const birthDate = ref('')
@@ -192,8 +177,6 @@ const selectedDate = ref(['2000', '01', '01'])
 
 const result = ref(null)
 const readingId = ref('')
-const isPaid = ref(false)
-const unlockLoading = ref(false)
 
 const timeOptions = [
   '子时 (23:00-01:00)',
@@ -232,25 +215,24 @@ const calculate = async () => {
   }
 
   loading.value = true
-  
+
   try {
     showLoadingToast({
       message: '正在测算...',
       forbidClick: true,
     })
-    
+
     const res = await baziApi.calculate({
       birthDate: birthDate.value,
       birthTime: birthTime.value,
       gender: gender.value
     })
-    
+
     closeToast()
-    
+
     if (res.code === 200) {
       result.value = res.data
       readingId.value = res.data.readingId
-      isPaid.value = res.data.isPaid || false
     }
   } catch (err) {
     closeToast()
@@ -260,35 +242,9 @@ const calculate = async () => {
   }
 }
 
-const unlockDetail = async () => {
-  unlockLoading.value = true
-  
-  try {
-    const res = await baziApi.unlock(readingId.value)
-    
-    if (res.code === 200 && res.data.mockPaySuccess) {
-      await payApi.mockSuccess(res.data.orderId)
-      
-      showToast('解锁成功')
-      
-      // 重新获取结果
-      const readingRes = await baziApi.getReading(readingId.value)
-      if (readingRes.code === 200) {
-        isPaid.value = true
-        result.value.detail = readingRes.data.detail
-      }
-    }
-  } catch (err) {
-    showToast('解锁失败')
-  } finally {
-    unlockLoading.value = false
-  }
-}
-
 const reset = () => {
   result.value = null
   readingId.value = ''
-  isPaid.value = false
   birthDate.value = ''
   birthTime.value = ''
   gender.value = 1
@@ -441,19 +397,7 @@ const getElementName = (element) => {
   text-align: justify;
 }
 
-/* 解锁部分 */
-.unlock-section {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-
-.unlock-preview {
-  font-size: 14px;
-  margin-bottom: 15px;
-  opacity: 0.9;
-}
-
-/* 付费详细解读 */
+/* 详细解读（免费） */
 .paid-section .detail-item {
   margin-bottom: 20px;
 }

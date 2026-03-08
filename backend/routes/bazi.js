@@ -24,10 +24,25 @@ router.post('/calculate', authMiddleware, async (req, res) => {
     const time = birthTime || '12:00'
     
     // 计算八字
-    const bazi = lunarService.getBazi(birthDate, time)
+    const baziResult = lunarService.getBazi(birthDate, time)
+    
+    // 转换为AI服务期望的格式
+    const baziForAI = {
+      year: `${baziResult.bazi.year.gan}${baziResult.bazi.year.zhi}`,
+      month: `${baziResult.bazi.month.gan}${baziResult.bazi.month.zhi}`,
+      day: `${baziResult.bazi.day.gan}${baziResult.bazi.day.zhi}`,
+      hour: `${baziResult.bazi.hour.gan}${baziResult.bazi.hour.zhi}`,
+      wuxing: {
+        金: baziResult.wuxing.metal || 0,
+        木: baziResult.wuxing.wood || 0,
+        水: baziResult.wuxing.water || 0,
+        火: baziResult.wuxing.fire || 0,
+        土: baziResult.wuxing.earth || 0
+      }
+    }
     
     // AI生成性格分析
-    const character = await aiService.generateBaziCharacter(bazi)
+    const character = await aiService.generateBaziCharacter(baziForAI)
     
     // 保存记录
     const reading = await BaziReading.create({

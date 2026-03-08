@@ -12,8 +12,8 @@
     </div>
 
     <div class="zodiac-grid">
-      <div 
-        v-for="zodiac in zodiacs" 
+      <div
+        v-for="zodiac in zodiacs"
         :key="zodiac.name"
         class="zodiac-card"
         @click="viewFortune(zodiac)"
@@ -31,9 +31,9 @@
     </van-tabbar>
 
     <!-- 星座详情弹窗 -->
-    <van-popup 
-      v-model:show="showDetail" 
-      position="bottom" 
+    <van-popup
+      v-model:show="showDetail"
+      position="bottom"
       :style="{ height: '80%' }"
       round
     >
@@ -88,32 +88,10 @@
           </div>
         </div>
 
-        <div v-if="!fortune?.paid?.isUnlocked" class="unlock-section">
-          <van-button 
-            type="primary" 
-            block 
-            round
-            :loading="unlockLoading"
-            @click="unlockFortune"
-          >
-            解锁详细运势（9.9元）
-          </van-button>
-        </div>
-
-        <div v-if="fortune?.paid?.isUnlocked" class="detail-section">
-          <div class="title">详细分析</div>
-          <div class="detail-item">
-            <div class="label">💕 爱情运势</div>
-            <div class="content">{{ fortune?.detail?.love }}</div>
-          </div>
-          <div class="detail-item">
-            <div class="label">💼 事业运势</div>
-            <div class="content">{{ fortune?.detail?.career }}</div>
-          </div>
-          <div class="detail-item">
-            <div class="label">💰 财运分析</div>
-            <div class="content">{{ fortune?.detail?.money }}</div>
-          </div>
+        <!-- MVP版本：所有内容免费开放，无需解锁 -->
+        <div class="advice-section">
+          <div class="title">今日建议</div>
+          <div class="advice">{{ (fortune?.free?.advice || ['保持积极心态']).join('、') }}</div>
         </div>
       </div>
     </van-popup>
@@ -125,7 +103,6 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { showLoadingToast, closeToast, showToast } from 'vant'
 import { zodiacApi } from '@/api/zodiac'
-import { payApi } from '@/api/pay'
 
 const router = useRouter()
 const active = ref(1)
@@ -153,55 +130,27 @@ const zodiacs = [
 const showDetail = ref(false)
 const currentZodiac = ref(null)
 const fortune = ref(null)
-const unlockLoading = ref(false)
 
 const viewFortune = async (zodiac) => {
   currentZodiac.value = zodiac
   showDetail.value = true
-  
+
   try {
     showLoadingToast({
       message: '正在生成运势...',
       forbidClick: true,
     })
-    
+
     const res = await zodiacApi.getDaily(zodiac.en)
-    
+
     closeToast()
-    
+
     if (res.code === 200) {
       fortune.value = res.data
     }
   } catch (err) {
     closeToast()
     showToast('获取运势失败')
-  }
-}
-
-const unlockFortune = async () => {
-  unlockLoading.value = true
-  
-  try {
-    const res = await zodiacApi.unlock(
-      currentZodiac.value.en,
-      new Date().toISOString().split('T')[0]
-    )
-    
-    if (res.code === 200 && res.data.mockPaySuccess) {
-      await payApi.mockSuccess(res.data.orderId)
-      
-      showToast('解锁成功')
-      
-      // 重新获取运势
-      const fortuneRes = await zodiacApi.getDaily(currentZodiac.value.en)
-      if (fortuneRes.code === 200) {
-        fortune.value = fortuneRes.data
-      }
-    }
-  } catch (err) {
-    showToast('解锁失败')
-  } finally {
-    unlockLoading.value = false
   }
 }
 </script>
@@ -371,35 +320,23 @@ const unlockFortune = async () => {
   font-weight: bold;
 }
 
-.unlock-section {
+.advice-section {
   padding: 20px 0;
 }
 
-.detail-section {
-  padding: 20px 0;
-}
-
-.detail-section .title {
+.advice-section .title {
   font-size: 18px;
   font-weight: bold;
   color: #333;
-  margin-bottom: 15px;
+  margin-bottom: 10px;
 }
 
-.detail-item {
-  margin-bottom: 20px;
-}
-
-.detail-item .label {
-  font-size: 16px;
-  font-weight: bold;
-  color: #333;
-  margin-bottom: 8px;
-}
-
-.detail-item .content {
+.advice-section .advice {
   font-size: 15px;
   color: #666;
   line-height: 1.6;
+  padding: 15px;
+  background: #f0f5ff;
+  border-radius: 8px;
 }
 </style>
