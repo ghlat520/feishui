@@ -47,6 +47,16 @@ try {
   app.use('/api/user', require('./routes/user'))
   app.use('/api/share', require('./routes/share'))
   console.log('✅ 路由注册成功')
+  
+  // 调试：列出所有注册的路由
+  console.log('📋 已注册路由:')
+  app._router.stack.forEach((middleware) => {
+    if (middleware.route) {
+      console.log(`  ${middleware.route.path}`)
+    } else if (middleware.name === 'router') {
+      console.log(`  ${middleware.regexp}`)
+    }
+  })
 } catch (err) {
   console.error('❌ 路由注册失败:', err)
 }

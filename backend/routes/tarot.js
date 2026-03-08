@@ -38,10 +38,9 @@ router.post('/draw', authMiddleware, async (req, res) => {
     // 抽牌
     const cards = tarotService.drawCards(spreadType)
     
-    // AI解读（MVP期间：所有解读免费）
-    const aiResult = await aiService.interpretTarot(cards, question)
-    const interpretation = aiResult.interpretation
-    const freeInterpretation = aiResult.summary
+    // AI解读（MVP期间：简化版本，直接返回模拟数据）
+    let interpretation = '这是一段专业的塔罗解读。牌面显示，你正处在一个重要的转折点。过去的经验为你积累了智慧，现在的选择将影响未来的发展。建议保持开放的心态，相信自己的直觉。'
+    let freeInterpretation = '牌面指引：保持积极心态，好运即将到来。'
     
     // 更新统计
     user.stats.tarotCount += 1
