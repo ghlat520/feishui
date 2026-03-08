@@ -6,18 +6,18 @@ export const tarotApi = {
     return request.post('/tarot/draw', data)
   },
   
+  // 获取解读详情
+  getReading(id) {
+    return request.get(`/tarot/${id}`)
+  },
+  
   // 解锁详细解读
-  unlock(readingId) {
-    return request.post('/tarot/unlock', { readingId })
+  unlock(readingId, payMethod = 'wechat') {
+    return request.post('/tarot/unlock', { readingId, payMethod })
   },
   
   // AI对话
   chat(readingId, message) {
     return request.post('/tarot/chat', { readingId, message })
-  },
-  
-  // 获取解读详情
-  getReading(id) {
-    return request.get(`/tarot/${id}`)
   }
 }
