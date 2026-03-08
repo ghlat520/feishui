@@ -155,11 +155,11 @@ router.post('/unlock', authMiddleware, async (req, res) => {
 // 辅助函数
 function getWuxingLack(wuxing) {
   const lacks = []
-  if (wuxing.金 === 0) lacks.push('金')
-  if (wuxing.木 === 0) lacks.push('木')
-  if (wuxing.水 === 0) lacks.push('水')
-  if (wuxing.火 === 0) lacks.push('火')
-  if (wuxing.土 === 0) lacks.push('土')
+  if (wuxing.metal === 0) lacks.push('金')
+  if (wuxing.wood === 0) lacks.push('木')
+  if (wuxing.water === 0) lacks.push('水')
+  if (wuxing.fire === 0) lacks.push('火')
+  if (wuxing.earth === 0) lacks.push('土')
   return lacks
 }
 
