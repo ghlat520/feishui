@@ -53,12 +53,17 @@ app.use('/api/', limiter)
 app.use('/uploads', express.static('uploads'))
 
 // 路由
-app.use('/api/auth', authRoutes)
-app.use('/api/zodiac', zodiacRoutes)
-app.use('/api/tarot', tarotRoutes)
-app.use('/api/bazi', baziRoutes)
-app.use('/api/pay', payRoutes)
-app.use('/api/user', userRoutes)
+try {
+  app.use('/api/auth', require('./routes/auth'))
+  app.use('/api/zodiac', require('./routes/zodiac'))
+  app.use('/api/tarot', require('./routes/tarot'))
+  app.use('/api/bazi', require('./routes/bazi'))
+  app.use('/api/pay', require('./routes/pay'))
+  app.use('/api/user', require('./routes/user'))
+  console.log('✅ 路由注册成功')
+} catch (err) {
+  console.error('❌ 路由注册失败:', err)
+}
 
 // 健康检查
 app.get('/health', (req, res) => {
