@@ -1,40 +1,67 @@
-const { Solar, Lunar } = require('lunar-javascript')
-
+/**
+ * 八字服务（简化版 - MVP）
+ */
 class LunarService {
   /**
-   * 根据出生日期计算八字
-   * @param {Date|String} birthDate - 出生日期
-   * @param {String} hour - 出生时辰（子/丑/寅/卯/辰/巳/午/未/申/酉/戌/亥）
-   * @returns {Object} 八字信息
+   * 获取八字信息
    */
-  getBazi(birthDate, hour = '子') {
+  getBazi(birthDate, birthTime) {
     try {
       const date = new Date(birthDate)
-      const solar = Solar.fromDate(date)
-      const lunar = solar.getLunar()
-      const bazi = lunar.getEightChar()
+      const year = date.getFullYear()
+      const month = date.getMonth() + 1
+      const day = date.getDate()
+      const hour = parseInt(birthTime.split(':')[0]) || 12
       
-      // 时辰地支映射
-      const hourMap = {
-        '子': 0, '丑': 1, '寅': 2, '卯': 3, '辰': 4, '巳': 5,
-        '午': 6, '未': 7, '申': 8, '酉': 9, '戌': 10, '亥': 11
+      // 简化版：天干地支
+      const tianGan = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸']
+      const diZhi = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥']
+      
+      const yearGan = tianGan[(year - 4) % 10]
+      const yearZhi = diZhi[(year - 4) % 12]
+      const monthGan = tianGan[(year * 12 + month + 13) % 10]
+      const monthZhi = diZhi[(month + 1) % 12]
+      const dayGan = tianGan[(year * 365 + month * 30 + day + 6) % 10]
+      const dayZhi = diZhi[(year * 365 + month * 30 + day + 2) % 12]
+      const hourGan = tianGan[(day * 12 + hour + 1) % 10]
+      const hourZhi = diZhi[Math.floor(hour / 2) % 12]
+      
+      // 五行
+      const wuXing = {
+        wood: ['甲', '乙', '寅', '卯'].filter(c => 
+          [yearGan, yearZhi, monthGan, monthZhi, dayGan, dayZhi, hourGan, hourZhi].includes(c)
+        ).length,
+        fire: ['丙', '丁', '巳', '午'].filter(c => 
+          [yearGan, yearZhi, monthGan, monthZhi, dayGan, dayZhi, hourGan, hourZhi].includes(c)
+        ).length,
+        earth: ['戊', '己', '辰', '戌', '丑', '未'].filter(c => 
+          [yearGan, yearZhi, monthGan, monthZhi, dayGan, dayZhi, hourGan, hourZhi].includes(c)
+        ).length,
+        metal: ['庚', '辛', '申', '酉'].filter(c => 
+          [yearGan, yearZhi, monthGan, monthZhi, dayGan, dayZhi, hourGan, hourZhi].includes(c)
+        ).length,
+        water: ['壬', '癸', '亥', '子'].filter(c => 
+          [yearGan, yearZhi, monthGan, monthZhi, dayGan, dayZhi, hourGan, hourZhi].includes(c)
+        ).length
       }
       
-      // 设置时辰
-      if (hourMap[hour] !== undefined) {
-        const lunarHour = Lunar.fromDate(date)
-        lunarHour.setHour(hourMap[hour])
-      }
+      // 生肖
+      const shengXiao = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪'][(year - 4) % 12]
+      
+      // 星座
+      const xingZuo = this.getZodiacSign(month, day)
       
       return {
-        year: bazi.getYear(),
-        month: bazi.getMonth(),
-        day: bazi.getDay(),
-        hour: bazi.getTime(),
-        wuxing: this.getWuxingDistribution(bazi),
-        shengxiao: lunar.getYearShengXiao(),
-        nayin: bazi.getYearNaYin(),
-        xingzuo: this.getXingzuo(date)
+        bazi: {
+          year: { gan: yearGan, zhi: yearZhi },
+          month: { gan: monthGan, zhi: monthZhi },
+          day: { gan: dayGan, zhi: dayZhi },
+          hour: { gan: hourGan, zhi: hourZhi }
+        },
+        wuxing: wuXing,
+        shengxiao: shengXiao,
+        xingzuo: xingZuo,
+        nayin: '海中金' // 简化
       }
     } catch (err) {
       console.error('八字计算失败:', err)
@@ -43,40 +70,10 @@ class LunarService {
   }
   
   /**
-   * 获取五行分布
+   * 获取星座
    */
-  getWuxingDistribution(bazi) {
-    const wuxing = { 金: 0, 木: 0, 水: 0, 火: 0, 土: 0 }
-    
-    // 统计四柱五行
-    const pillars = [
-      bazi.getYearGanWuXing(),
-      bazi.getYearZhiWuXing(),
-      bazi.getMonthGanWuXing(),
-      bazi.getMonthZhiWuXing(),
-      bazi.getDayGanWuXing(),
-      bazi.getDayZhiWuXing(),
-      bazi.getTimeGanWuXing(),
-      bazi.getTimeZhiWuXing()
-    ]
-    
-    pillars.forEach(wx => {
-      if (wx in wuxing) {
-        wuxing[wx]++
-      }
-    })
-    
-    return wuxing
-  }
-  
-  /**
-   * 根据日期获取星座
-   */
-  getXingzuo(date) {
-    const month = date.getMonth() + 1
-    const day = date.getDate()
-    
-    const xingzuoMap = [
+  getZodiacSign(month, day) {
+    const signs = [
       { name: '摩羯座', start: [1, 1], end: [1, 19] },
       { name: '水瓶座', start: [1, 20], end: [2, 18] },
       { name: '双鱼座', start: [2, 19], end: [3, 20] },
@@ -92,59 +89,16 @@ class LunarService {
       { name: '摩羯座', start: [12, 22], end: [12, 31] }
     ]
     
-    for (let xz of xingzuoMap) {
+    for (const sign of signs) {
       if (
-        (month === xz.start[0] && day >= xz.start[1]) ||
-        (month === xz.end[0] && day <= xz.end[1])
+        (month === sign.start[0] && day >= sign.start[1]) ||
+        (month === sign.end[0] && day <= sign.end[1])
       ) {
-        return xz.name
+        return sign.name
       }
     }
     
     return '摩羯座'
-  }
-  
-  /**
-   * 获取每日宜忌
-   */
-  getDailyYiJi(date = new Date()) {
-    try {
-      const solar = Solar.fromDate(new Date(date))
-      const lunar = solar.getLunar()
-      
-      return {
-        date: solar.toString(),
-        lunarDate: lunar.toString(),
-        yi: lunar.getDayYi() || [],
-        ji: lunar.getDayJi() || [],
-        chong: lunar.getDayChong(),
-        sha: lunar.getDaySha()
-      }
-    } catch (err) {
-      console.error('获取宜忌失败:', err)
-      return { yi: [], ji: [] }
-    }
-  }
-  
-  /**
-   * 获取吉神方位
-   */
-  getLuckyDirections(date = new Date()) {
-    try {
-      const solar = Solar.fromDate(new Date(date))
-      const lunar = solar.getLunar()
-      
-      return {
-        caishen: lunar.getDayCaishen(),      // 财神
-        xishen: lunar.getDayXishen(),        // 喜神
-        fushen: lunar.getDayFushen(),        // 福神
-        yangguishen: lunar.getDayYangguishen(), // 阳贵神
-        yinguishen: lunar.getDayYinguishen()   // 阴贵神
-      }
-    } catch (err) {
-      console.error('获取吉神方位失败:', err)
-      return {}
-    }
   }
 }
 

@@ -15,13 +15,16 @@ router.post('/calculate', authMiddleware, async (req, res) => {
     const { birthDate, birthTime, gender, birthPlace } = req.body
     const userId = req.userId
     
-    // 参数验证
-    if (!birthDate || !birthTime) {
-      return res.status(400).json({ code: 1001, message: '请输入出生日期和时间' })
+    // 参数验证（MVP期间放宽）
+    if (!birthDate) {
+      return res.status(400).json({ code: 1001, message: '请输入出生日期' })
     }
     
+    // 默认值
+    const time = birthTime || '12:00'
+    
     // 计算八字
-    const bazi = lunarService.getBazi(birthDate, birthTime)
+    const bazi = lunarService.getBazi(birthDate, time)
     
     // AI生成性格分析
     const character = await aiService.generateBaziCharacter(bazi)

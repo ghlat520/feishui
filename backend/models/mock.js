@@ -158,6 +158,16 @@ const TarotReading = {
 
 // Mock模型 - ZodiacLog
 const ZodiacLog = {
+  async findOne(query) {
+    for (const [id, log] of memoryDB.zodiacLogs) {
+      let match = true
+      if (query.zodiac && log.zodiac !== query.zodiac) match = false
+      if (query.date && log.date !== query.date) match = false
+      if (match) return { ...log, _id: id }
+    }
+    return null
+  },
+  
   async create(data) {
     const id = generateId()
     const log = {

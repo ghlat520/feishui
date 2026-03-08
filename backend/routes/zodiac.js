@@ -24,8 +24,12 @@ router.get('/:name/daily', authMiddleware, async (req, res) => {
     })
     
     if (!log) {
-      // AI生成运势
-      const fortune = await aiService.generateZodiacFortune(zodiacName, targetDate)
+      // MVP期间：使用简化运势数据
+      const fortune = {
+        love: { score: 8, description: '感情运势良好' },
+        career: { score: 7, description: '工作进展顺利' },
+        money: { score: 7, description: '财运平稳' }
+      }
       
       log = await ZodiacLog.create({
         userId: req.userId,
@@ -37,9 +41,9 @@ router.get('/:name/daily', authMiddleware, async (req, res) => {
           career: fortune.career,
           money: fortune.money
         },
-        summary: fortune.summary,
-        detail: fortune.detail,
-        advice: fortune.advice
+        summary: `${zodiacName}今日运势平稳，适合处理重要事务。保持积极心态，好运自然会来。`,
+        detail: '详细解读需要解锁',
+        advice: ['保持积极心态', '专注当下', '好运自然来']
       })
     }
     
